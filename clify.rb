@@ -42,7 +42,7 @@ def main
   end
   track_url = ARGV[0]
   if track_url.nil? || track_url.empty?
-    puts "Using: #{$0} <URL track from SC>"
+    puts "Using: #{$0} <URL track from the any site>"
     exit 1
   end
   stream_url=get_url(track_url)
