@@ -1,10 +1,5 @@
 require 'shellwords'
 require 'open3'
-PLAYER = ['ffplay', 'mpg123'].find { |p| system("which #{p} < /dev/null 2>&1")}
-PLAYER_ARGS = {
-  'ffplay' => '-nodisp -autoexit',
-  'mpg123' => '-q'
-}
 
 def get_url(track_url)
   puts "Waiting for stream: #{track_url}..."
