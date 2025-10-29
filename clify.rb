@@ -13,7 +13,7 @@ TUI_UPDATE_INTERVAL_MS = 100
 PLAYER = 'ffplay' 
 
 PLAYER_ARGS = {
-  'ffplay' => '-nodisp -autoexit -loglevel error'
+  'ffplay' => '-nodisp -autoexit -loglevel error -probesize 32 -analyzeduration 10000000'
 }
 
 $time_data = {
@@ -21,6 +21,9 @@ $time_data = {
   total: 0, 
   status: 'Playing'
 }
+
+# ФЛАГ ДЛЯ ОБРАБОТКИ ИЗМЕНЕНИЯ РАЗМЕРА ОКНА
+$resized = false 
 
 # --- 1. ФУНКЦИЯ ПОЛУЧЕНИЯ ДАННЫХ О ТРЕКЕ ---
 
@@ -70,38 +73,66 @@ end
 # --- 3. ФУНКЦИЯ ОТРИСОВКИ TUI ---
 
 def redraw_window(win, track_title, player)
+    # 1. Определение максимальных размеров 
     max_height = Curses.lines
     max_width  = Curses.cols
     
-    height = [10, max_height].min 
-    width  = (max_width * 0.95).to_i
-    start_row = (max_height - height) / 2
-    start_col = (max_width - width) / 2
+    # 2. Динамические размеры окна: привязка к краям 
+    height = max_height
+    width  = max_width
+    start_row = 0
+    start_col = 0
     
+
+    return if height < 5 || width < 30
+
+    # 3. Перерисовка, очистка и рамка (перезапуск окна)
     win.resize(height, width) 
     win.move(start_row, start_col) 
     win.clear
-    win.box(0, 0) 
+    win.box(0, 0) # Рамка теперь всегда по краям консоли
     
-    max_title_length = width - 5 
+    # --- 4. ЦЕНТРИРОВАНИЕ СОДЕРЖИМОГО ---
+    
+    # Позиция начала контента (4 строки выше центра)
+    content_start_row = (height / 2) - 4 
+    
     display_title = track_title
+    max_title_length = width - 4 
     if display_title.length > max_title_length
         display_title = display_title[0, max_title_length - 3] + "..."
     end
+    
+    # 4a. Заголовок "Playing"
+    playing_str = "🎵 Playing:"
+    col_playing = (width / 2) - (playing_str.length / 2)
+    win.setpos(content_start_row, col_playing)
+    win.addstr(playing_str) 
 
-    win.setpos(2, 2)
-    win.addstr("🎵 Playing:") 
-    win.setpos(3, 2)
+    # 4b. Название трека
+    col_title = (width / 2) - (display_title.length / 2)
+    win.setpos(content_start_row + 1, col_title)
     win.addstr(display_title) 
 
+    # 4c. Статус и плеер
+    status_str = "Status: #{$time_data[:status]} (Player: #{player})"
+    col_status = (width / 2) - (status_str.length / 2)
+    win.setpos(content_start_row + 3, col_status)
+    win.addstr(status_str) 
+
+    # --- 4d. ВРЕМЯ И ПРОГРЕСС-БАР ---
+    
     current_time = format_time($time_data[:current])
     total_time = format_time($time_data[:total])
-    status = $time_data[:status]
     
-    win.setpos(5, 2)
-    win.addstr("Status: #{status} (Player: #{player})") 
-    
-    progress_bar_width = width - 10 
+    # 4e. Время
+    time_str = "#{current_time} / #{total_time}"
+    col_time = (width / 2) - (time_str.length / 2)
+    win.setpos(content_start_row + 5, col_time)
+    win.addstr(time_str)
+
+    # 4f. Прогресс-бар 
+    progress_bar_width = [50, width - 10].min # Максимум 50 символов
     
     if $time_data[:total] > 0
         progress = $time_data[:current].to_f / $time_data[:total]
@@ -114,16 +145,15 @@ def redraw_window(win, track_title, player)
     
     progress_line = "[#{'█' * filled_width}#{' ' * (progress_bar_width - filled_width)}]"
     
-    time_str = "#{current_time} / #{total_time}"
-    
-    win.setpos(7, 2)
-    win.addstr(time_str)
-    
-    win.setpos(8, 2)
+    col_progress = (width / 2) - (progress_bar_width / 2) - 1 
+    win.setpos(content_start_row + 6, col_progress)
     win.addstr(progress_line)
     
-    win.setpos(height - 2, 2)
-    win.addstr("Press Q to exit, P to pause/play...") 
+    # 4g. Инструкции
+    instruction_str = "Press Q to exit, P or SPACE to pause/play..."
+    col_instruction = (width / 2) - (instruction_str.length / 2)
+    win.setpos(height - 2, col_instruction)
+    win.addstr(instruction_str) 
     
     win.refresh 
     Curses.doupdate
@@ -143,13 +173,11 @@ def play_stream(stream_url, player, track_title)
     end
 
     args = PLAYER_ARGS[player]
-    
-    # ФИНАЛЬНЫЙ СБОР КОМАНДЫ: Аргументы -> -i (ввод) -> URL
     player_command = "#{player} #{args} -i #{Shellwords.escape(stream_url)}"
     
     cmd = Shellwords.split(player_command)
     
-    begin
+begin
         # --- ИНИЦИАЛИЗАЦИЯ Curses ---
         Curses.init_screen
         Curses.noecho
@@ -158,24 +186,25 @@ def play_stream(stream_url, player, track_title)
         
         win = Curses::Window.new(0, 0, 0, 0) 
         
-        Signal.trap('WINCH') do
-            Curses.stdscr.resize(0, 0)
-            redraw_window(win, track_title, player)
-        end
         
-        redraw_window(win, track_title, player)
-        
+        redraw_window(win, track_title, player)        
         # --- ЗАПУСК ПЛЕЕРА ---
         
         serr_r, serr_w = IO.pipe 
         
-        # Опция :in => :close заменяет флаг -nostdin и предотвращает конфликт с -i.
         pid = spawn(*cmd, {:in => :close, :out => '/dev/null', 2 => serr_w, :close_others => true})
 
         serr_w.close 
         
         # --- ГЛАВНЫЙ ЦИКЛ УПРАВЛЕНИЯ ---
-        loop do
+          loop do
+            if Curses.resizeterm(0, 0)
+
+                Curses.clear
+                Curses.refresh
+                redraw_window(win, track_title, player)
+            end
+            
             if $time_data[:status] == 'Playing'
               $time_data[:current] += (TUI_UPDATE_INTERVAL_MS.to_f / 1000)
               
@@ -251,3 +280,4 @@ def main
 end
 
 main
+
