@@ -92,7 +92,7 @@ def get_track_data_recursive(track_or_entry)
   env_opts = proxy ? {"ALL_PROXY" => proxy} : {}
 
   unless is_playlist_item
-    puts "Checking for playlist/set: #{url}..."
+    puts "[WIP] Checking for playlist/set: #{url}..."
     
     playlist_command_array = [
         "yt-dlp", 
@@ -111,7 +111,7 @@ def get_track_data_recursive(track_or_entry)
         if playlist_json['_type'] == 'playlist' && playlist_json['entries'].is_a?(Array)
           
           playlist_items = []
-          puts "Playlist detected with #{playlist_json['entries'].size} entries. Processing items..."
+          puts "[WIP] Playlist detected with #{playlist_json['entries'].size} entries. Processing items..."
           
           playlist_json['entries'].each do |entry|
             item_data = get_track_data_recursive(entry)
@@ -129,7 +129,7 @@ def get_track_data_recursive(track_or_entry)
 
 
   
-  puts "Waiting for stream data (single track): #{url}..."
+  puts "[WIP] Waiting for stream data (single track): #{url}..."
   
   command_array = [
       "yt-dlp", 
@@ -184,7 +184,6 @@ def get_player_command(file_path)
         ]
         
     elsif PLAYER == 'mpv'
-        # Запасной MPV
         args = [
             '--no-video', '--no-terminal', '--ao=alsa', 
             '--input-ipc-server=/tmp/clify-mpv-socket', Shellwords.escape(file_path)
@@ -216,11 +215,11 @@ def get_ascii_cover_output(url, width)
     renderer_args = "--size #{width}x30 --fill - --format symbols" 
     
   else
-    return ["*** jp2a/chafa не найдены ***"]
+    return ["*** jp2a/chafa doesnt founded ***"]
   end
 
   unless system('which curl > /dev/null 2>&1')
-    return ["*** curl не найден ***"]
+    return ["*** curl doesnt founded ***"]
   end
 
   return [] unless url
@@ -233,7 +232,7 @@ def get_ascii_cover_output(url, width)
   if status.success?
     return stdout.lines.map(&:chomp).reject(&:empty?)
   else
-    return ["*** Ошибка рендеринга обложки (#{tool_cmd}) ***"]
+    return ["*** Error of art renderer (#{tool_cmd}) ***"]
   end
 end
 
@@ -254,7 +253,6 @@ end
 
 def volume_up
     if PLAYER == 'mplayer'
-        # Команда MPlayer: "volume +10"
         system("echo 'volume +10' > #{FIFO_PATH} &")
         $current_volume = [$current_volume + 10, 200].min
     end
@@ -306,9 +304,9 @@ def redraw_window(win, player)
     
     if $playlist_tracks.empty?
         win.setpos(height / 2 - 3, (width / 2) - 30)
-        win.addstr("Плейлист пуст. Используйте клавишу '/' для поиска.")
+        win.addstr("Playlist is empty. Use '/' for search.")
         win.setpos(height / 2 - 2, (width / 2) - 20)
-        win.addstr("Нажмите 'Q' для выхода.")
+        win.addstr("Press 'Q' for exit.")
     else
         cover_height = $ascii_cover.size
         content_start_row = (height / 2) - ((cover_height + 13) / 2) 
@@ -429,17 +427,17 @@ def play_track_cycle
             Shellwords.escape(original_url)
         ]
 
-        puts "\n⏬ Скачивание трека в: #{path}..."
-        puts "   > Команда: yt-dlp (ALL_PROXY=SOCKS5_PROXY_HIDDEN)"
+        puts "\n⏬ [WIP] Downloading track in: #{path}..."
+        puts "   > Command: yt-dlp (ALL_PROXY=SOCKS5_PROXY_HIDDEN)"
 
         stdout, stderr, status = Open3.capture3(env_opts, *yt_dlp_command)
         
         unless status.success?
-            puts "❌ Ошибка скачивания! (yt-dlp код: #{status.exitstatus})"
+            puts "❌ Error downloading! (yt-dlp code: #{status.exitstatus})"
             puts stderr
             return false
         end
-        puts "✅ Скачивание завершено."
+        puts "✅ Downlaoding is done."
         return true
     end
 
@@ -473,18 +471,18 @@ def play_track_cycle
             return :NEXT 
         end
 
-        puts "⌛ Ожидание готовности файла перед запуском #{PLAYER}..."
+        puts "⌛ Waiting for file #{PLAYER}..."
         sleep 1 
         wait_start = Time.now
         
         loop do
             if File.exist?(temp_file_path) && File.size(temp_file_path) > 0
-                puts "✅ Файл готов."
+                puts "✅ File is ready."
                 break
             end
 
             if Time.now - wait_start > 15
-                puts "❌ Ошибка: Файл не стал доступен в течение 15 секунд. Пропуск трека."
+              puts "❌ Error: file doesnt was ascessable in 15 seconds. Skip track."
                 return :NEXT
             end
             sleep 0.1
@@ -558,11 +556,11 @@ begin
 
         if File.exist?(temp_file_path)
             FileUtils.rm_f(temp_file_path)
-            puts "\n🗑️ Удален временный файл: #{temp_file_path}"
+            puts "\nDeleted temp file: #{temp_file_path}"
         end
         if File.exist?(FIFO_PATH)
             FileUtils.rm_f(FIFO_PATH)
-            puts "🗑️ Удален управляющий FIFO: #{FIFO_PATH}"
+            puts "Deleted config FIFO: #{FIFO_PATH}"
         end
 
         action = $playlist_action
@@ -573,8 +571,8 @@ end
 
 
 def interactive_search_cli
-    puts "\n🎶 Интерактивный поиск SoundCloud"
-    print "Введите поисковый запрос (или Q для отмены): "
+    puts "\n🎶 Search on SoundCloud"
+    print "Enter track name (Q for exit): "
     search_query = STDIN.gets.chomp
     
     return nil if ['q', 'Q', 'quit', 'exit'].include?(search_query.downcase)
@@ -588,7 +586,7 @@ def interactive_search_cli
         Shellwords.escape(search_url)
     ]
     
-    puts "Searching for tracks..."
+    puts "[WIP] Searching for tracks..."
     
     proxy = ENV['ALL_PROXY']
     env_opts = proxy ? {"ALL_PROXY" => proxy} : {}
@@ -596,24 +594,24 @@ def interactive_search_cli
     stdout, _, status = Open3.capture3(env_opts, *search_command)
     
     unless status.success?
-        puts "❌ Ошибка при выполнении поиска через yt-dlp."
+        puts "❌ Searching error thourgh yt-dlp."
         return nil
     end
     
     begin
         search_result = JSON.parse(stdout.lines.last.strip)
     rescue JSON::ParserError
-        puts "❌ Ошибка парсинга результата поиска. Попробуйте другой запрос."
+        puts "❌ Error parsing of search request. Try another track name"
         return nil
     end
 
     entries = search_result['entries']
     if entries.nil? || entries.empty?
-        puts "🤷‍♂️ Ничего не найдено по запросу: '#{search_query}'."
+        puts " :( Nothing is founded: '#{search_query}'."
         return nil
     end
     
-    puts "\n🔍 Найдено #{entries.size} треков. Выберите номер трека:"
+    puts "\ :) Founded #{entries.size} track. Choose track number:"
     
     entries.each_with_index do |entry, index|
         title = entry['title'] || "Unknown Title"
@@ -623,7 +621,7 @@ def interactive_search_cli
         puts "#{index + 1}. #{display_title}"
     end
     
-    print "\nВведите номер (1-#{entries.size}) или Q для отмены: "
+    print "\nEnter number (1-#{entries.size}) or Q for exit: "
     choice = STDIN.gets.chomp.downcase
     
     return nil if ['q', 'quit', 'exit'].include?(choice)
@@ -633,7 +631,7 @@ def interactive_search_cli
     if choice_index >= 0 && choice_index < entries.size
         return entries[choice_index]
     else
-        puts "Неверный номер. Отмена выбора."
+        puts "Invalid number."
         return nil
     end
 end
@@ -669,15 +667,15 @@ def play_playlist
                 $time_data = {
                   current: 0.0, 
                   total: current_track[:total_duration] || 0, 
-                  status: 'Loading',
+                  status: '[WIP] Loading',
                   start_time: nil,    
                   offset: 0.0         
                 }
                 $playback_state[:start_position] = 0.0
                 
-                puts "\n🖼️ Загрузка и рендеринг обложки..."
+                puts "\ [WIP] Downloading and redndering art..."
                 $ascii_cover = get_ascii_cover_output(current_track[:thumbnail_url], 40)
-                puts "✅ Обложка загружена."
+                puts "✅ Art is loaded."
                 
                 action = play_track_cycle 
             end
@@ -703,7 +701,7 @@ def play_playlist
                         insert_index = $playlist_tracks.empty? ? 0 : $current_track_index + 1
                         $playlist_tracks.insert(insert_index, track_data)
                         $current_track_index = insert_index
-                        puts "✅ Трек добавлен и будет воспроизведен следующим."
+                        puts "✅ Track will be added next."
                     end
                 end
                 
@@ -721,13 +719,13 @@ def play_playlist
         nil
     ensure
         Curses.close_screen if Curses.stdscr 
-        puts "\n⏹️ Воспроизведение плейлиста завершено."
+        puts "\n⏹️ Playlist streaming is ended."
     end
 end
 
 def main
   unless system('which mplayer > /dev/null 2>&1')
-     puts "❌ Ошибка: MPlayer не найден. Пожалуйста, установите MPlayer (например, sudo apt install mplayer)."
+     puts "❌ Error: MPlayer doesnt found. Please, install MPlayer (like, sudo apt install mplayer)."
      exit 1
   end
 
@@ -735,7 +733,7 @@ def main
   
   if track_urls.empty?
     puts "--------------------------------------------------------"
-    puts "🎶 CLIFY Player: Режим интерактивного запуска"
+    puts "🎶 CLIFY: search mode"
     puts "--------------------------------------------------------"
 
     selected_entry = interactive_search_cli 
