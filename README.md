@@ -1,9 +1,12 @@
 
-# 🎶 CLIFY Player (CLI-Fi)
+# 🎶 CLIFY (CLI-Fi)
 
-**CLIFY Player** is a minimalist and functional command-line audio player for Linux, written in Ruby. Its purpose is to search, download, and play tracks from SoundCloud and other sources directly within your terminal (TUI).
+**CLIFY** is a minimalist and functional command-line audio player for Linux, written in Ruby. Its purpose is to search, download, and play tracks from SoundCloud and other sources directly within your terminal (TUI).
 
-**CLIFY Player** — это минималистичный и функциональный консольный аудиоплеер для Linux, написанный на Ruby. Он предназначен для поиска, скачивания и воспроизведения треков с SoundCloud и других источников прямо в вашем терминале (TUI).
+**CLIFY** — это минималистичный и функциональный консольный аудиоплеер для Linux, написанный на Ruby. Он предназначен для поиска, скачивания и воспроизведения треков с SoundCloud и других источников прямо в вашем терминале (TUI).
+
+<img width="1921" height="1081" alt="image" src="https://github.com/user-attachments/assets/cb07b851-cfff-4ddc-bba9-0fe2f8c8f98d" />
+
 
 ## 🚀 Features (Особенности)
 
@@ -98,5 +101,6 @@ sudo apt install jp2a
 The player saves its state (playlist, position, volume) in this file:
 Плеер сохраняет свое состояние (плейлист, позицию, громкость) в этом файле:
 
-
+```bash
 ~/.clify_state.json
+```
