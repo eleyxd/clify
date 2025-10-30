@@ -15,7 +15,7 @@ TUI_UPDATE_INTERVAL_MS = 100
 PLAYER = 'mplayer' 
 REWIND_STEP_SECONDS = 10 
 FIFO_PATH = '/tmp/clify-mplayer-fifo'
-
+STATE_FILE_PATH = File.join(ENV['HOME'], '.clify_state.json')
 
 $player_pid = nil
 $curses_win = nil
@@ -47,7 +47,7 @@ $time_data = {
 
 $current_volume = 100 
 $restart_required = false 
-
+$load_state_enabled = true
 
 
 def extract_metadata(data)
@@ -465,7 +465,6 @@ def play_track_cycle
         end
     end
     
-    # 1. Скачивание 
     unless File.exist?(temp_file_path)
         unless download_track($stream_url, temp_file_path) 
             return :NEXT 
@@ -550,23 +549,17 @@ begin
     rescue Interrupt
         $playlist_action = :EXIT
     ensure
-        $drawing_thread.kill if $drawing_thread.alive? rescue nil
-
+      $drawing_thread.kill if $drawing_thread.alive? rescue nil
         Process.kill('TERM', $player_pid) rescue nil if $player_pid
-
+        if $playlist_action == :NEXT || $playlist_action == :PREVIOUS || $playlist_action == :EXIT
+             save_state
+        end
         if File.exist?(temp_file_path)
-            FileUtils.rm_f(temp_file_path)
-            puts "\nDeleted temp file: #{temp_file_path}"
-        end
-        if File.exist?(FIFO_PATH)
-            FileUtils.rm_f(FIFO_PATH)
-            puts "Deleted config FIFO: #{FIFO_PATH}"
-        end
-
         action = $playlist_action
         $playlist_action = nil 
         return action
     end
+  end
 end
 
 
@@ -633,6 +626,54 @@ def interactive_search_cli
     else
         puts "Invalid number."
         return nil
+    end
+end
+
+def load_state
+    return unless File.exist?(STATE_FILE_PATH)   
+    begin
+        state_data = JSON.parse(File.read(STATE_FILE_PATH))
+
+        if state_data['playlist_tracks'].is_a?(Array) && !state_data['playlist_tracks'].empty?
+            $playlist_tracks = state_data['playlist_tracks'].map do |track|
+                track.transform_keys!(&:to_sym) 
+            end
+            puts "✅ Loaded playlist with #{state_data['playlist_tracks'].size} tracks."
+        end
+        if $playlist_tracks.size > 0
+            index = state_data['current_track_index'].to_i
+            $current_track_index = [index, $playlist_tracks.size - 1].min
+            $playback_state[:start_position] = state_data['start_position'].to_f
+        end
+        $current_volume = state_data['current_volume'].to_i
+        
+    rescue JSON::ParserError, TypeError => e
+        puts "⚠️ Error reading of config file: #{e.message}"
+    end
+end
+
+def save_state
+    return if $playlist_tracks.empty?
+    if $time_data[:status] == 'Playing'
+        current_position = $time_data[:current]
+    else
+        current_position = $time_data[:offset]
+    end
+    serializable_tracks = $playlist_tracks.map do |track|
+        track.transform_keys(&:to_s) 
+    end
+    
+    state_data = {
+        'playlist_tracks' => serializable_tracks,
+        'current_track_index' => $current_track_index,
+        'start_position' => current_position.round(1),
+        'current_volume' => $current_volume
+    }
+
+    begin
+        File.write(STATE_FILE_PATH, JSON.pretty_generate(state_data))
+    rescue => e
+        puts "⚠️ Saving failed: #{e.message}"
     end
 end
 
@@ -717,7 +758,9 @@ def play_playlist
         end
     rescue Interrupt
         nil
+        save_state
     ensure
+      save_state
         Curses.close_screen if Curses.stdscr 
         puts "\n⏹️ Playlist streaming is ended."
     end
@@ -728,7 +771,21 @@ def main
      puts "❌ Error: MPlayer doesnt found. Please, install MPlayer (like, sudo apt install mplayer)."
      exit 1
   end
+  load_state
 
+  if ARGV.include?('--no-state')
+    $load_state_enabled = false
+    ARGV.delete('--no-state') 
+    puts "⚠️ Config will not edited and readed (--no-state)."
+  end
+  if $load_state_enabled
+    load_state
+  else
+    $playlist_tracks = []
+    $current_track_index = 0
+    $playback_state[:start_position] = 0.0
+    puts "✅ Start with clean playlist."
+  end
   track_urls = ARGV
   
   if track_urls.empty?
